@@ -16,9 +16,9 @@ This is a Shiny app that visualizes injury-related outcomes (e.g., overdoses, dr
   - `sf`
   - `dplyr`
   - `tidycensus`
-  - `here`
+  - `readr`
   
 Install the required R packages by running:
 
 ```r
-install.packages(c("shiny", "tigris", "tmap", "sf", "dplyr", "tidycensus", "here"))
+install.packages(c("shiny", "tigris", "tmap", "sf", "dplyr", "tidycensus", "readr"))
