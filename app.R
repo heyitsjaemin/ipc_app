@@ -24,46 +24,46 @@ library(tigris)
 library(tmap)
 library(sf)
 library(dplyr)
+library(readr)
 
+# Load pre-downloaded data from a CSV file 
+file_path <- "data/"
+overdose_data <- read_csv(paste0(file_path, "overdose_stats_2022.csv"))
 
 # Load shapefile for the entire USA
 usa_shapefile <- states(class = "sf")
 
-# Exclude Alaska, Hawaii, and other non-mainland U.S. territories
-usa_shapefile <- usa_shapefile %>% 
-  filter(!NAME %in% c("Alaska", "Hawaii", "District of Columbia"))
+# Check the first few rows of both datasets to ensure correct matching
+head(usa_shapefile$STUSPS)
+head(overdose_data$STATE)
 
-# Get U.S. population data using tigris (from the census)
-census_data <- tidycensus::get_decennial(
-  geography = "state",
-  variables = "P001001", # Total population
-  year = 2020
-)
+# Merge the overdose data with the shapefile (based on state abbreviation)
+merged_data <- usa_shapefile %>%
+  left_join(overdose_data, by = c("STUSPS" = "STATE"))
 
-# Merge census data with shapefile (join by state name)
-usa_shapefile <- usa_shapefile %>%
-  left_join(census_data, by = c("NAME" = "NAME"))
+# Check the merged data to confirm the merge was successful
+head(merged_data)
 
 # Transform CRS if needed (optional but recommended for consistency)
-usa_shapefile <- st_transform(usa_shapefile, crs = 4326) # WGS84 CRS for web visualization
+merged_data <- st_transform(merged_data, crs = 4326)  # WGS84 CRS for web visualization
 
 # Set tmap mode to interactive
 tmap_mode("view")
 
 # UI for Shiny app
 ui <- fluidPage(
-  titlePanel("Map of County Level Counts of Injury Related Outcomes"),
+  titlePanel("Map of Injury Related Outcomes"),
   sidebarLayout(
     sidebarPanel(
       selectInput(
         inputId = "var",
         label = "Choose a variable to visualize:",
-        choices = c("Population", "Overdoses", "Drowning", "Road Accidents"),
-        selected = "Population"
+        choices = c("Overdose Rate", "Death Count"),
+        selected = "Overdose Rate"
       )
     ),
     mainPanel(
-      tmapOutput("usa_map") # Placeholder for the map
+      tmapOutput("usa_map")  # Placeholder for the map
     )
   )
 )
@@ -72,15 +72,15 @@ ui <- fluidPage(
 server <- function(input, output, session) {
   # Render the tmap plot
   output$usa_map <- renderTmap({
-    tm_shape(usa_shapefile) +
+    tm_shape(merged_data) +
       tm_borders() +
       tm_fill(
-        col = "P001001", # Population variable
-        palette = "YlGnBu", # Color palette
-        title = "Population"
+        col = ifelse(input$var == "Overdose Rate", "RATE", "DEATHS"),  # Dynamically choose the column to display
+        palette = "YlGnBu",  # Color palette
+        title = input$var
       ) +
       tm_text(
-        text = "NAME", # State name to show
+        text = "NAME",  # Display the state name
         size = 0.5, 
         col = "black"
       ) +
