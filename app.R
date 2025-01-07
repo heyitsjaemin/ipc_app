@@ -27,6 +27,7 @@
 #
 #
 # Reference: https://docs.google.com/document/d/1Z3jY6O5alo5CAnI_WzFExaNsg0lEMiaPeREQvnpev5Q/edit?tab=t.0
+# Population Stats Reference: https://www.census.gov/data/tables/time-series/demo/popest/2020s-state-total.html#v2024
 #######################################################
 
 
@@ -140,8 +141,8 @@ ui <- fluidPage(
       selectInput(
         inputId = "var",
         label = "Choose a variable to visualize:",
-        choices = c("Overdose Rate", "Road Accidents", "Drowning"),
-        selected = "Overdose Rate"
+        choices = c("Opioid Overdose", "Firearm", "Suicide", "Older Adult Falls", "Motor Vehicle Crash", "Adverse Childhood Experiences", "Concussion", "Drowning"),
+        selected = "Opioid Overdose"
       ),
       # Add a title for the table
       tags$h4("Summary Statistics"),
@@ -194,17 +195,25 @@ server <- function(input, output, session) {
     return(state_data$DEATHS)
   })
   
+  # Create a reactive expression for fetching the selected state's population (POPULATION)
+  selected_state_pop <- reactive({
+    state_id <- selected_state()
+    state_data <- merged_data %>% filter(STUSPS == state_id)
+    return(state_data$POPULATION)
+  })
+  
   # Sample data for the 2x4 table
   table_data <- reactive({
     # Get the overdose rate for the selected state
     name_value <- selected_state_name()
     rate_value <- selected_state_rate()
     death_value <- selected_state_death()
+    pop_value <- selected_state_pop()
     
     # Create the table with the updated second row value
     data.frame(
       Field = c("National Average", "State", "Overdose Rate", "Total Deaths", "Total Population"),
-      Value = c(avg_overdose_rate, name_value , rate_value, death_value, "###")
+      Value = c(round(avg_overdose_rate,2), name_value , round(rate_value,2), death_value, pop_value)
     )
   })
   
@@ -232,15 +241,19 @@ server <- function(input, output, session) {
       tm_layout(scale = 1.5) 
   })
   
+  
+
   # Update the selected state when the user clicks on a state
   observeEvent(input$usa_map_shape_click, {
     # Store selected state ID
     selected_state(input$usa_map_shape_click$id)
     
     # If Michigan is clicked, redirect to another Shiny page (state-level page)
-    if (selected_state() == "MI") {
-      updateQueryString("?page=state_level_map", mode = "push")  
+    if (trimws(selected_state()) == "MI") {
+      updateQueryString("?page=state_level_map", mode = "push")
     }
+    
+    
   })
 }
 
