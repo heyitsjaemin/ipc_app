@@ -59,15 +59,82 @@ tmap_mode("view")
 # UI for Shiny app
 ui <- fluidPage(
   useShinyjs(),  # Initialize shinyjs
-  titlePanel("Map of Injury Related Outcomes"),
+  # Add custom CSS for the title and other page styling
+  tags$style(HTML("
+    body {
+      background-color: #f0f8ff;  /* Light Blue Background */
+      color: #333333;  /* Dark Text Color */
+    }
+    .sidebar {
+      background-color: #e0f7fa;  /* Lighter Blue Sidebar */
+      padding: 20px;
+      border-radius: 10px;
+    }
+    .main-panel {
+      background-color: #ffffff;
+      border-radius: 10px;
+      padding: 20px;
+    }
+    .shiny-input-container {
+      margin-bottom: 10px;
+    }
+    .tabset-panel {
+      background-color: #e0f7fa;  /* Lighter Blue for active sections */
+    }
+    
+    /* Title styling */
+    .title-panel {
+      font-size: 36px;
+      font-weight: bold;
+      color: #00796b;  /* Dark Teal for Titles */
+      text-align: center;
+      padding: 20px;
+      background-color: #ffffff;
+      border-radius: 10px;
+      box-shadow: 0px 4px 6px rgba(0, 0, 0, 0.1);
+      margin-bottom: 20px;
+    }
+    
+    h4 {
+      color: #00796b;  /* Dark Teal for Subtitle */
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    table, th, td {
+      border: 1px solid #00796b;
+    }
+    th, td {
+      padding: 8px;
+      text-align: left;
+    }
+    th {
+      background-color: #00796b;
+      color: white;
+    }
+    td {
+      background-color: #e0f7fa;
+    }
+  ")),
+  
+  # Styled title for the app
+  div(class = "title-panel", 
+      "Map of Injury Related Outcomes"
+  ),
+  
   sidebarLayout(
     sidebarPanel(
       selectInput(
         inputId = "var",
         label = "Choose a variable to visualize:",
-        choices = c("Overdose Rate", "Death Count"),
+        choices = c("Overdose Rate", "Road Accidents", "Drowning"),
         selected = "Overdose Rate"
-      )
+      ),
+      # Add a title for the table
+      tags$h4("Summary Statistics"),
+      # Add table output below the dropdown
+      tableOutput("my_table")  # Placeholder for the table
     ),
     mainPanel(
       tmapOutput("usa_map")  # Placeholder for the map only
@@ -93,6 +160,46 @@ server <- function(input, output, session) {
       RATE = ifelse(is.na(RATE), 0, RATE),  # Replace NA with 0
       DEATHS = ifelse(is.na(DEATHS), 0, DEATHS)  # Replace NA with 0
     )
+  
+  # Create a reactive expression for fetching the selected state's name (NAME)
+  selected_state_name <- reactive({
+    state_id <- selected_state()
+    state_data <- merged_data %>% filter(STUSPS == state_id)
+    return(state_data$NAME)
+  })
+  
+  # Create a reactive expression for fetching the selected state's overdose rate (RATE)
+  selected_state_rate <- reactive({
+    state_id <- selected_state()
+    state_data <- merged_data %>% filter(STUSPS == state_id)
+    return(state_data$RATE)
+  })
+  
+  # Create a reactive expression for fetching the selected state's death tolls (DEATHS)
+  selected_state_death <- reactive({
+    state_id <- selected_state()
+    state_data <- merged_data %>% filter(STUSPS == state_id)
+    return(state_data$DEATHS)
+  })
+  
+  # Sample data for the 2x4 table
+  table_data <- reactive({
+    # Get the overdose rate for the selected state
+    name_value <- selected_state_name()
+    rate_value <- selected_state_rate()
+    death_value <- selected_state_death()
+    
+    # Create the table with the updated second row value
+    data.frame(
+      Field = c("National Average", "State", "Overdose Rate", "Total Deaths", "Total Population"),
+      Value = c(avg_overdose_rate, name_value , rate_value, death_value, "###")
+    )
+  })
+  
+  # Render the table
+  output$my_table <- renderTable({
+    table_data()
+  })
   
   # Render the map
   output$usa_map <- renderTmap({
