@@ -6,6 +6,16 @@
 #
 # Script Description:
 #
+# This Shiny app provides an interactive platform to visualize injury-related outcomes across the United States, 
+# focusing on overdose rates, road accidents, and drowning statistics. Users can select different variables 
+# from a dropdown menu, allowing them to toggle between various datasets for comparison. 
+#
+# The map is color-coded based on the selected variable, highlighting state-specific data 
+# such as overdose rates or total deaths. Clicking on a state updates a table below the map with 
+# detailed statistics for that state, including its overdose rate, total deaths, and population. 
+# The table automatically updates as the user clicks on different states, 
+# offering an easy way to compare statistics across the country.
+#
 # Author: Jaemin Jeon
 # Copyright (c) Jaemin Jeon, 2024
 # Email:  jjaemin@umich.edu
@@ -14,7 +24,9 @@
 #
 #
 # Notes:
-# https://docs.google.com/document/d/1Z3jY6O5alo5CAnI_WzFExaNsg0lEMiaPeREQvnpev5Q/edit?tab=t.0
+#
+#
+# Reference: https://docs.google.com/document/d/1Z3jY6O5alo5CAnI_WzFExaNsg0lEMiaPeREQvnpev5Q/edit?tab=t.0
 #######################################################
 
 
