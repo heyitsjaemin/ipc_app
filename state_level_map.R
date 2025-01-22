@@ -216,6 +216,8 @@ server <- function(input, output, session) {
         style = "quantile",
         title = "Total Dispensed per Population"  # Title for the legend
       ) +
+      tm_shape(water_areas) +  # Add the water areas to the map
+      tm_fill(col = "blue", alpha = 1) +  # Style the water areas
       tm_layout(scale = 1.5)
   })
 }
