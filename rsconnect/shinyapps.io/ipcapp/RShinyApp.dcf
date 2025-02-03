@@ -5,7 +5,7 @@ account: ipcapp
 server: shinyapps.io
 hostUrl: https://api.shinyapps.io/v1
 appId: 13675393
-bundleId: 9616805
+bundleId:
 url: https://ipcapp.shinyapps.io/RShinyApp/
 version: 1
 asMultiple: FALSE

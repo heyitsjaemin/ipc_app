@@ -72,88 +72,108 @@ tmap_mode("view")
 # UI for Shiny app
 ui <- fluidPage(
   useShinyjs(),  # Initialize shinyjs
-  # Add custom CSS for the title and other page styling
-  tags$style(HTML("
+  
+  tags$head(
+    tags$style(href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500&display=swap", rel="stylesheet"),
+    
+    # Custom CSS for styling the header
+    tags$style(HTML("
     body {
-      background-color: #f0f8ff;  /* Light Blue Background */
-      color: #333333;  /* Dark Text Color */
+      background-color: whites; 
+      color: black;  
+      font-family: 'Roboto', Arial, sans-serif;
     }
-    .sidebar {
-      background-color: #e0f7fa;  /* Lighter Blue Sidebar */
-      padding: 20px;
-      border-radius: 10px;
+    .container-fluid {
+      padding : 0;
     }
-    .main-panel {
-      background-color: #ffffff;
-      border-radius: 10px;
-      padding: 20px;
-    }
-    .shiny-input-container {
-      margin-bottom: 10px;
-    }
-    .tabset-panel {
-      background-color: #e0f7fa;  /* Lighter Blue for active sections */
-    }
-    
-    /* Title styling */
-    .title-panel {
-      font-size: 36px;
-      font-weight: bold;
-      color: #00796b;  /* Dark Teal for Titles */
-      text-align: center;
-      padding: 20px;
-      background-color: #ffffff;
-      border-radius: 10px;
-      box-shadow: 0px 4px 6px rgba(0, 0, 0, 0.1);
-      margin-bottom: 20px;
-    }
-    
-    h4 {
-      color: #00796b;  /* Dark Teal for Subtitle */
-    }
-    table {
+    .header-container {
       width: 100%;
-      border-collapse: collapse;
+      background-color: #ffffff;
+      border-bottom: 2px solid #00796b;
+      padding: 10px 0l
     }
-    table, th, td {
-      border: 1px solid #00796b;
+    .top-bar {
+      display: flex;
+      justify-content: flex-end;
+      font-size: 14px;
+      padding: 5px 20px;
+      background-color: #f5f5f5;
     }
-    th, td {
-      padding: 8px;
-      text-align: left;
+    .top-bar a {
+      color: #003366;
+      font-weight: bold;
+      margin-left: 15px;
+      text-decoration: underline;
     }
-    th {
-      background-color: #00796b;
-      color: white;
+    .top-bar a:hover {
+      color: #00579c;
     }
-    td {
-      background-color: #e0f7fa;
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 30px 20px;
+    }
+    .logo {
+      height: 30px;
+    }
+    .nav-links {
+      display: flex;
+      gap: 15px;
+    }
+    .nav-links a {
+      font-family: 'Roboto', Arial, sans-serif;
+      text-decoration: none;
+      color: #000000;
+      font-size: 16px;
     }
   ")),
-  
-  # Styled title for the app
-  div(class = "title-panel", 
-      "Map of Injury Related Outcomes"
-  ),
-  
-  sidebarLayout(
-    sidebarPanel(
-      selectInput(
-        inputId = "var",
-        label = "Choose a variable to visualize:",
-        choices = c("Opioid Overdose", "Firearm", "Suicide", "Older Adult Falls", "Motor Vehicle Crash", "Adverse Childhood Experiences", "Concussion", "Drowning"),
-        selected = "Opioid Overdose"
-      ),
-      # Add a title for the table
-      tags$h4("Summary Statistics"),
-      # Add table output below the dropdown
-      tableOutput("my_table")  # Placeholder for the table
+    
+    # Full Header (Top Bar + Navigation)
+    div(class = "header-container",
+        div(class = "top-bar",
+            tags$a(href = "https://injurycenter.umich.edu/about-us/membership/", "Become a Member"),
+            tags$a(href = "https://injurycenter.umich.edu/#", "Donate")
+        ),
+        div(class = "header",
+            tags$img(src = "image/templogo.png", class = "logo"),
+            div(class = "nav-links",
+                tags$a(href = "https://injurycenter.umich.edu/about-us/", "About"),
+                tags$a(href = "https://injurycenter.umich.edu/injury-focus-areas/", "Focus Areas"),
+                tags$a(href = "https://injurycenter.umich.edu/education/", "Education"),
+                tags$a(href = "https://injurycenter.umich.edu/research/", "Research"),
+                tags$a(href = "https://injurycenter.umich.edu/services-resources/", "Resources"),
+                tags$a(href = "https://injurycenter.umich.edu/events", "Events"),
+                tags$a(href = "https://injurycenter.umich.edu/about-us/contact-us/", "Contact Us")
+            )
+        )
     ),
-    mainPanel(
-      tmapOutput("usa_map")  # Placeholder for the map only
+    
+    # Styled title for the app
+    div(class = "title-panel", 
+        "Map of Injury Related Outcomes"
+    ),
+    
+    sidebarLayout(
+      sidebarPanel(
+        selectInput(
+          inputId = "var",
+          label = "Choose a variable to visualize:",
+          choices = c("Opioid Overdose", "Firearm", "Suicide", "Older Adult Falls", "Motor Vehicle Crash", "Adverse Childhood Experiences", "Concussion", "Drowning"),
+          selected = "Opioid Overdose"
+        ),
+        tags$h4("Summary Statistics"),
+        tableOutput("my_table")  # Placeholder for the table
+      ),
+      mainPanel(
+        tmapOutput("usa_map")  # Placeholder for the map only
+      )
     )
   )
+  
 )
+
+
 
 # Server for Shiny app
 server <- function(input, output, session) {
