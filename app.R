@@ -41,30 +41,65 @@ library(shinyjs)
 
 # Load pre-downloaded data from a CSV file
 file_path <- "data/"
-overdose_data <- read_csv(paste0(file_path, "ipcapp_011_usa_overdose_2022.csv"))
+overdose_state <- read_delim(paste0(file_path, "ipcapp_030_overdose_by_state_2018_2023.txt"), delim="\t")
+overdose_county <- read_delim(paste0(file_path, "ipcapp_031_overdose_by_county_2018_2023.txt"), delim="\t")
+
+# Remove the state abbreviation from the COUNTY column
+overdose_county$County <- gsub(", [A-Z]{2}$", "", overdose_county$County)
+overdose_county <- overdose_county %>%
+  mutate(CRUDE_RATE = ifelse(is.na(`Crude Rate`), -1, `Crude Rate`))
 
 # Load shapefile for the entire USA
-usa_shapefile <- states(class = "sf")
+usa_states <- states(cb = TRUE, class = "sf")
+usa_counties <- counties(cb = TRUE, class = "sf")
+
 
 # Define states/territories to exclude
-exclude_states <- c("American Samoa", "Hawaii", "Commonwealth of the Northern Mariana Islands",
-                    "Guam", "Alaska", "Puerto Rico", "United States Virgin Islands", "District of Columbia")
+exclude_states <- c("American Samoa", "Alaska", "Hawaii", "Commonwealth of the Northern Mariana Islands",
+                    "Guam", "Puerto Rico", "United States Virgin Islands", "District of Columbia")
 
-# Merge the overdose data with the shapefile (based on state abbreviation)
-merged_data <- usa_shapefile %>%
-  left_join(overdose_data, by = c("STUSPS" = "STATE")) %>%
-  filter(!NAME %in% exclude_states, NAME != "District of Columbia")  # Exclude specified states/territories
+exclude_counties <- overdose_county %>%
+  filter(!State %in% exclude_states)
+usa_counties <- usa_counties %>%
+  filter(!STATE_NAME %in% exclude_states)
 
-# Remove the unwanted columns from merged_data
-merged_data <- merged_data %>%
-  select(-REGION, -DIVISION, -STATEFP, -STATENS, -GEOID)
+# Clean and prepare the dataset
+overdose_state <- overdose_state %>%
+  rename(STATE = State, DEATHS = Deaths, POPULATION = Population, CRUDE_RATE = `Crude Rate`) %>%
+  mutate(CRUDE_RATE = as.numeric(gsub("Unreliable", NA, CRUDE_RATE)),  # Handle non-numeric values
+         STATE = trimws(STATE))  # Remove trailing spaces
+
+overdose_county <- exclude_counties %>%
+  rename(STATE = State, COUNTY = County, DEATHS = Deaths, POPULATION = Population, CRUDE_RATE = `Crude Rate`) %>%
+  mutate(CRUDE_RATE = as.numeric(ifelse(CRUDE_RATE == "Unreliable", "UN", CRUDE_RATE)),  # Handle non-numeric values safely
+         STATE = trimws(STATE))  # Remove trailing spaces
+
+# Merge the new dataset with the shapefile (based on state abbreviation)
+merged_state_data <- usa_states %>%
+  left_join(overdose_state, by = c("NAME" = "STATE")) %>%
+  filter(!NAME %in% exclude_states)  # Exclude specified states/territories
 
 
-# Transform CRS if needed (optional but recommended for consistency)
-merged_data <- st_transform(merged_data, crs = 4326)  # WGS84 CRS for web visualization
+merged_county_data <- usa_counties %>%
+  left_join(overdose_county, by = c("STATE_NAME" = "STATE", "NAMELSAD" = "COUNTY")) %>%
+  filter(!STATE_NAME %in% exclude_states)  # Exclude specified states/territories
 
-# Calculate the average overdose rate across the country
-avg_overdose_rate <- mean(overdose_data$RATE, na.rm = TRUE)
+
+# Remove the unwanted columns from merged_state_data
+merged_state_data <- merged_state_data %>%
+  select(-STATEFP, -STATENS, -AFFGEOID, -GEOID)
+
+
+merged_county_data <- merged_county_data %>%
+  select(-STATEFP, -COUNTYFP, -COUNTYNS, -AFFGEOID, -GEOID)
+
+# Transform CRS for consistency
+merged_state_data <- st_transform(merged_state_data, crs = 4326)
+merged_county_data <- st_transform(merged_county_data, crs = 4326)
+
+# Extract the "Total" row for national statistics
+total_row <- overdose_state %>% filter(Notes == "Total")
+avg_crude_rate <- as.numeric(total_row$`CRUDE_RATE`)
 
 # Set tmap mode to interactive
 tmap_mode("view")
@@ -79,8 +114,8 @@ ui <- fluidPage(
     # Custom CSS for styling the header
     tags$style(HTML("
     body {
-      background-color: whites; 
-      color: black;  
+      background-color: #FFFFFF; 
+      color: #000000;  
       font-family: 'Roboto', Arial, sans-serif;
     }
     .container-fluid {
@@ -127,6 +162,60 @@ ui <- fluidPage(
       color: #000000;
       font-size: 16px;
     }
+    .title-panel {
+      text-align: center;
+      font-size: 30px;
+      font-weight: bold;
+      color: #ffffff;
+      background-color: #00274c;
+      padding: 30px;
+    }
+    .update-date {
+      text-align: right;
+      padding: 20px;
+    }
+    .radio-toolbar {
+        display: flex;
+        justify-content: center;
+        gap: 15px;
+        background-color: #f8fbff;
+        padding: 12px;;
+    }
+    
+    .shiny-input-radiogroup {
+        display: flex;
+        gap: 15px;
+    }
+
+    .shiny-input-radiogroup label {
+        padding: 10px 20px;
+        font-size: 16px;
+        font-weight: bold;
+        border-radius: 5px;
+        cursor: pointer;
+        background-color: #e0e0e0;
+        border: 2px solid #ccc;
+        transition: all 0.3s ease-in-out;
+    }
+    .shiny-input-radiogroup input[type='radio'] {
+        display: none;
+    }
+    .shiny-input-radiogroup .active {
+        background-color: #007BFF;
+        color: white;
+        border-color: #0056b3;
+    }
+    .sidebar-layout {
+      padding: 20px;
+    }
+    .sidebar {
+      padding: 15px; 
+      background-color: #f9f9f9; 
+      border-radius: 5px; 
+    }
+    .main-panel {
+      padding-left: 20px; 
+    }
   ")),
     
     # Full Header (Top Bar + Navigation)
@@ -151,7 +240,22 @@ ui <- fluidPage(
     
     # Styled title for the app
     div(class = "title-panel", 
-        "Map of Injury Related Outcomes"
+        "Injury Related Outcome Data"
+    ),
+    
+    
+    div(class = "update-date",
+      "Last Updated on Feb 3, 2025"    
+    ),
+    
+    div(class = "radio-toolbar",
+        radioButtons(
+          inputId = "level",
+          label = NULL,  # Removes the label
+          choices = c("State" = "state", "County" = "county"),
+          selected = "state",  # Default selection
+          inline = TRUE  # Display options horizontally
+        )
     ),
     
     sidebarLayout(
@@ -159,8 +263,8 @@ ui <- fluidPage(
         selectInput(
           inputId = "var",
           label = "Choose a variable to visualize:",
-          choices = c("Opioid Overdose", "Firearm", "Suicide", "Older Adult Falls", "Motor Vehicle Crash", "Adverse Childhood Experiences", "Concussion", "Drowning"),
-          selected = "Opioid Overdose"
+          choices = c("Unintentional Drug Overdose Death Rate", "Firearm", "Suicide", "Drowning"),
+          selected = "Unintentional Drug Overdose Death Rate"
         ),
         tags$h4("Summary Statistics"),
         tableOutput("my_table")  # Placeholder for the table
@@ -173,108 +277,224 @@ ui <- fluidPage(
   
 )
 
-
-
 # Server for Shiny app
 server <- function(input, output, session) {
-  # Initially, set Michigan as the default state
-  selected_state <- reactiveVal("MI")
   
-  # Ensure RATE and DEATHS columns are numeric and handle lists
-  merged_data <- merged_data %>%
-    mutate(
-      RATE = as.numeric(unlist(RATE)),  # Flatten list and convert to numeric
-      DEATHS = as.numeric(unlist(DEATHS))  # Flatten list and convert to numeric
-    )
+  # Reactive variable to track selected level
+  level_name <- reactiveVal("state")  # Default value is "state"
   
-  # Handle any missing or non-numeric values
-  merged_data <- merged_data %>%
-    mutate(
-      RATE = ifelse(is.na(RATE), 0, RATE),  # Replace NA with 0
-      DEATHS = ifelse(is.na(DEATHS), 0, DEATHS)  # Replace NA with 0
-    )
-  
-  # Create a reactive expression for fetching the selected state's name (NAME)
-  selected_state_name <- reactive({
-    state_id <- selected_state()
-    state_data <- merged_data %>% filter(STUSPS == state_id)
-    return(state_data$NAME)
+  # Observe changes in radio button input and update level_name
+  observeEvent(input$level, {
+    level_name(input$level)  # Updates level_name to "state" or "county"
+    cat("Level changed to:", level_name(), "\n")  # Prints for debugging
   })
   
-  # Create a reactive expression for fetching the selected state's overdose rate (RATE)
-  selected_state_rate <- reactive({
-    state_id <- selected_state()
-    state_data <- merged_data %>% filter(STUSPS == state_id)
-    return(state_data$RATE)
-  })
-  
-  # Create a reactive expression for fetching the selected state's death tolls (DEATHS)
-  selected_state_death <- reactive({
-    state_id <- selected_state()
-    state_data <- merged_data %>% filter(STUSPS == state_id)
-    return(state_data$DEATHS)
-  })
-  
-  # Create a reactive expression for fetching the selected state's population (POPULATION)
-  selected_state_pop <- reactive({
-    state_id <- selected_state()
-    state_data <- merged_data %>% filter(STUSPS == state_id)
-    return(state_data$POPULATION)
-  })
-  
-  # Sample data for the 2x4 table
-  table_data <- reactive({
-    # Get the overdose rate for the selected state
-    name_value <- selected_state_name()
-    rate_value <- selected_state_rate()
-    death_value <- selected_state_death()
-    pop_value <- selected_state_pop()
-    
-    # Create the table with the updated second row value
-    data.frame(
-      Field = c("National Average", "State", "Overdose Rate", "Total Deaths", "Total Population"),
-      Value = c(round(avg_overdose_rate,2), name_value , round(rate_value,2), death_value, pop_value)
-    )
-  })
-  
-  # Render the table
-  output$my_table <- renderTable({
-    table_data()
-  })
-  
-  # Render the map
-  output$usa_map <- renderTmap({
-    tm_shape(merged_data) +
-      tm_borders() +
-      tm_fill(
-        col = ifelse(input$var == "Overdose Rate", "RATE", "DEATHS"),  # Dynamically choose the column to display
-        palette = "YlGn", 
-        style = "quantile",
-        title = input$var,
-        popup.vars = c("NAME","RATE")
-      ) +
-      tm_text(
-        text = "STUSPS",  
-        size = 0.5, 
-        col = "black"
-      ) +
-      tm_layout(scale = 1.5) 
-  })
-  
-  
+  observe({
+    req(level_name())  # Ensure it's not NULL
+    if (level_name() == "state") {
+      print("State map selected")
+      # Initially, set Michigan as the default state
+      selected_state <- reactiveVal("MI")
+      
+      # Ensure RATE and DEATHS columns are numeric and handle lists
+      merged_state_data <- merged_state_data %>%
+        mutate(
+          CRUDE_RATE = as.numeric(unlist(CRUDE_RATE)),  # Flatten list and convert to numeric
+          DEATHS = as.numeric(unlist(DEATHS))  # Flatten list and convert to numeric
+        )
+      
+      # Handle any missing or non-numeric values
+      merged_state_data <- merged_state_data %>%
+        mutate(
+          CRUDE_RATE = ifelse(is.na(CRUDE_RATE), 0, CRUDE_RATE),  # Replace NA with 0
+          DEATHS = ifelse(is.na(DEATHS), 0, DEATHS)  # Replace NA with 0
+        )
+      
+      # Create a reactive expression for fetching the selected state's name (NAME)
+      selected_state_name <- reactive({
+        state_id <- selected_state()
+        state_data <- merged_state_data %>% filter(STUSPS == state_id)
+        return(state_data$NAME)
+      })
+      
+      # Create a reactive expression for fetching the selected state's overdose CRUDE_RATE (CRUDE_RATE)
+      selected_state_rate <- reactive({
+        state_id <- selected_state()
+        state_data <- merged_state_data %>% filter(STUSPS == state_id)
+        return(state_data$CRUDE_RATE)
+      })
+      
+      # Create a reactive expression for fetching the selected state's death tolls (DEATHS)
+      selected_state_death <- reactive({
+        state_id <- selected_state()
+        state_data <- merged_state_data %>% filter(STUSPS == state_id)
+        return(state_data$DEATHS)
+      })
+      
+      # Create a reactive expression for fetching the selected state's population (POPULATION)
+      selected_state_pop <- reactive({
+        state_id <- selected_state()
+        state_data <- merged_state_data %>% filter(STUSPS == state_id)
+        return(state_data$POPULATION)
+      })
+      
+      # Sample data for the 2x4 table
+      table_data <- reactive({
+        state_id <- selected_state()
+        state_data <- merged_state_data %>% filter(STUSPS == state_id)
+        
+        data.frame(
+          Field = c("National Average", "State", "Crude Death Rate", "Total Deaths", "Total Population"),
+          Value = c(formatC(avg_crude_rate, format = "f", big.mark = ",", digits = 2), 
+                    state_data$NAME, 
+                    formatC(state_data$CRUDE_RATE, format = "f", big.mark = ",", digits = 2), 
+                    formatC(state_data$DEATHS, format = "f", big.mark = ",", digits = 0), 
+                    formatC(state_data$POPULATION, format = "f", big.mark = ",", digits = 0))
+        )
+      })
+      
+      # Render the table
+      output$my_table <- renderTable({
+        table_data()
+      })
+      
+      # Render the map
+      output$usa_map <- renderTmap({
+        tm_shape(merged_state_data) +
+          tm_borders() +
+          tm_fill(
+            col = ifelse(input$var == "Overdose Rate", "CRUDE_RATE", "DEATHS"),  # Dynamically choose the column to display
+            palette = "YlGn", 
+            style = "quantile",
+            title = input$var,
+            popup.vars = c("State" = "NAME","Crude Rate" = "CRUDE_RATE")
+          ) +
+          tm_text(
+            text = "STUSPS",  
+            size = 0.5, 
+            col = "black"
+          ) +
+          tm_layout(scale = 1.5) 
+      })
+      
+      
+      
+      # Update the selected state when the user clicks on a state
+      observeEvent(input$usa_map_shape_click, {
+        # Store selected state ID
+        selected_state(input$usa_map_shape_click$id)
+        
+        # If Michigan is clicked, redirect to another Shiny page (state-level page)
+        if (trimws(selected_state()) == "MI") {
+          updateQueryString("?page=state_level_map", mode = "push")
+        }
+      })
+      # Add state-level processing code here
+    } else {
+      
+      
+      print("County map selected")
+      # Initially, set Washtenaw County, Michigan as the default state
+      selected_county <- reactiveVal("MI")
+      
+      # Ensure RATE and DEATHS columns are numeric and handle lists
+      merged_county_data <- merged_county_data %>%
+        mutate(
+          CRUDE_RATE = as.numeric(unlist(CRUDE_RATE)),  # Flatten list and convert to numeric
+          DEATHS = as.numeric(unlist(DEATHS))  # Flatten list and convert to numeric
+        )
+      
+      # Handle any missing or non-numeric values
+      merged_county_data <- merged_county_data %>%
+        mutate(
+          CRUDE_RATE = ifelse(is.na(CRUDE_RATE), 0, CRUDE_RATE),  # Replace NA with 0
+          DEATHS = ifelse(is.na(DEATHS), 0, DEATHS)  # Replace NA with 0
+        )
+      
+      # Create a reactive expression for fetching the selected state's name (NAME)
+      selected_county_name <- reactive({
+        county_id <- selected_county()
+        county_data <- merged_county_data %>% filter(STUSPS == state_id)
+        return(state_data$NAME)
+      })
+      
+      # Create a reactive expression for fetching the selected state's overdose CRUDE_RATE (CRUDE_RATE)
+      selected_state_rate <- reactive({
+        state_id <- selected_state()
+        state_data <- merged_state_data %>% filter(STUSPS == state_id)
+        return(state_data$CRUDE_RATE)
+      })
+      
+      # Create a reactive expression for fetching the selected state's death tolls (DEATHS)
+      selected_state_death <- reactive({
+        state_id <- selected_state()
+        state_data <- merged_state_data %>% filter(STUSPS == state_id)
+        return(state_data$DEATHS)
+      })
+      
+      # Create a reactive expression for fetching the selected state's population (POPULATION)
+      selected_state_pop <- reactive({
+        state_id <- selected_state()
+        state_data <- merged_state_data %>% filter(STUSPS == state_id)
+        return(state_data$POPULATION)
+      })
+      
+      # Sample data for the 2x4 table
+      table_data <- reactive({
+        state_id <- selected_state()
+        state_data <- merged_state_data %>% filter(STUSPS == state_id)
+        
+        data.frame(
+          Field = c("National Average", "State", "Crude Death Rate", "Total Deaths", "Total Population"),
+          Value = c(formatC(avg_crude_rate, format = "f", big.mark = ",", digits = 2), 
+                    state_data$NAME, 
+                    formatC(state_data$CRUDE_RATE, format = "f", big.mark = ",", digits = 2), 
+                    formatC(state_data$DEATHS, format = "f", big.mark = ",", digits = 0), 
+                    formatC(state_data$POPULATION, format = "f", big.mark = ",", digits = 0))
+        )
+      })
+      
+      # Render the table
+      output$my_table <- renderTable({
+        table_data()
+      })
+      
+      # Render the map
+      output$usa_map <- renderTmap({
+        tm_shape(merged_state_data) +
+          tm_borders() +
+          tm_fill(
+            col = ifelse(input$var == "Overdose Rate", "CRUDE_RATE", "DEATHS"),  # Dynamically choose the column to display
+            palette = "YlGn", 
+            style = "quantile",
+            title = input$var,
+            popup.vars = c("State" = "NAME","Crude Rate" = "CRUDE_RATE")
+          ) +
+          tm_text(
+            text = "STUSPS",  
+            size = 0.5, 
+            col = "black"
+          ) +
+          tm_layout(scale = 1.5) 
+      })
+      
+      
+      
+      # Update the selected state when the user clicks on a state
+      observeEvent(input$usa_map_shape_click, {
+        # Store selected state ID
+        selected_state(input$usa_map_shape_click$id)
+        
+        # If Michigan is clicked, redirect to another Shiny page (state-level page)
+        if (trimws(selected_state()) == "MI") {
+          updateQueryString("?page=state_level_map", mode = "push")
+        }
 
-  # Update the selected state when the user clicks on a state
-  observeEvent(input$usa_map_shape_click, {
-    # Store selected state ID
-    selected_state(input$usa_map_shape_click$id)
-    
-    # If Michigan is clicked, redirect to another Shiny page (state-level page)
-    if (trimws(selected_state()) == "MI") {
-      updateQueryString("?page=state_level_map", mode = "push")
+      })
     }
-    
-    
   })
+  
+  
 }
 
 # Run the Shiny app
