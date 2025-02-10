@@ -100,7 +100,7 @@ merged_state_data <- merged_state_data %>%
 
 
 merged_county_data <- merged_county_data %>%
-  select(-STATEFP, -COUNTYFP, -COUNTYNS, -AFFGEOID, -GEOID)
+  select(-COUNTYNS, -AFFGEOID, -GEOID)
 
 # Extract the "Total" row for national statistics
 total_row <- overdose_state %>% filter(Notes == "Total")
@@ -113,6 +113,51 @@ tmap_mode("view")
 ui <- fluidPage(
   useShinyjs(),  # Initialize shinyjs
   
+  # Footer Section
+  tags$footer(
+    class = "site-footer",
+    div(class = "footer-container",
+        div(class = "footer-column",
+            h3("Contact Us"),
+            p("734-936-9312"),
+            p("2800 Plymouth Road, Suite B10-G080"),
+            p("Ann Arbor, MI 48109-2800"),
+            tags$a(href = "https://injurycenter.umich.edu/about-us/contact-us/", 
+                   target = "_blank",  # Opens in a new tab
+                   class = "contact-btn", 
+                   "CONTACT FORM"),
+            h3("Follow Us"),
+            div(class = "social-icons",
+                tags$a(href = "#", tags$i(class = "fa fa-facebook")),
+                tags$a(href = "#", tags$i(class = "fa fa-twitter"))
+            )
+        ),
+        div(class = "footer-column",
+            h3("Make a Donation"),
+            p("If you share our passion for reducing injury in our state, region, and beyond, let’s talk."),
+            tags$a(href = "https://leadersandbest.umich.edu/find/#!/give/basket/fund/322195",
+                   class = "donate-btn",
+                   "DONATE")
+        ),
+        div(class = "footer-column",
+            h3("Become A Member"),
+            p("We warmly invite all interested in injury prevention to become a member."),
+            tags$a(href = "https://injurycenter.umich.edu/about-us/membership/becoming-a-member/",
+                   class = "membership-btn",
+                   "LEARN ABOUT MEMBERSHIP")
+        )
+    ),
+    hr(class = "footer-line"),
+    div(class = "footer-bottom",
+        p("Copyright © 2025",
+          tags$a(href = "https://regents.umich.edu/", "Regents of the University of Michigan"), " — ",
+          tags$a(href = "https://umich.edu/", "U-M Gateway"), " — ",
+          tags$a(href = "https://ecrt.umich.edu/", "Non-Discrimination Policy"), " — ",
+          tags$a(href = "https://procurement.umich.edu/suppliers/boxcar-studio/", "Michigan Web Design"), " by Boxcar Studio"
+        )
+    )
+  ),
+  
   tags$head(
     tags$style(href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500&display=swap", rel="stylesheet"),
     
@@ -122,6 +167,7 @@ ui <- fluidPage(
       background-color: #FFFFFF; 
       color: #000000;  
       font-family: 'Roboto', Arial, sans-serif;
+      overflow-x: hidden;  /* Hides any unnecessary horizontal scroll */
     }
     .container-fluid {
       padding : 0;
@@ -272,6 +318,94 @@ ui <- fluidPage(
     .main-panel {
       padding-left: 20px; 
     }
+    
+    .main-content {
+        margin-bottom: 50px; /* Adds space below the main content */
+    }
+    
+    .site-footer {
+        background-color: #00274c;
+        color: white;
+        font-family: 'Roboto', Arial, sans-serif;
+        padding: 40px 0;
+        text-align: left;
+      }
+      
+      .footer-container {
+        display: flex;
+        justify-content: space-between;
+        max-width: 1200px;
+        margin: auto;
+        padding: 0 40px;
+      }
+
+      .footer-column {
+        flex: 1;
+        padding: 10px;
+      }
+
+      .footer-column h3 {
+        font-size: 18px;
+        font-weight: bold;
+      }
+
+      .footer-column p {
+        font-size: 14px;
+        color: #ccc;
+      }
+
+      .contact-btn,
+      .donate-btn,
+      .membership-btn {
+        background-color: #ffcb05;
+        color: #00274c;
+        font-weight: bold;
+        padding: 10px 20px;
+        border: none;
+        border-radius: 5px;
+        cursor: pointer;
+        margin-top: 10px;
+        font-size: 14px;
+      }
+
+      .contact-btn:hover,
+      .donate-btn:hover,
+      .membership-btn:hover {
+        background-color: #e0b804;
+      }
+
+      .social-icons {
+        margin-top: 10px;
+      }
+
+      .social-icons a {
+        color: white;
+        font-size: 20px;
+        margin-right: 10px;
+        text-decoration: none;
+      }
+
+      .footer-line {
+        border: 0;
+        border-top: 1px solid #ccc;
+        margin: 30px auto;
+        width: 90%;
+      }
+
+      .footer-bottom {
+        text-align: center;
+        font-size: 12px;
+        color: #ccc;
+      }
+
+      .footer-bottom a {
+        color: #ffcb05;
+        text-decoration: none;
+      }
+
+      .footer-bottom a:hover {
+        text-decoration: underline;
+      }
   ")),
     
     # Full Header (Top Bar + Navigation)
@@ -301,7 +435,7 @@ ui <- fluidPage(
     
     
     div(class = "update-date",
-      "Last Updated on Feb 3, 2025"    
+      "Last Updated on Feb 10, 2025"    
     ),
     
     div(class = "radio-toolbar",
@@ -350,20 +484,22 @@ ui <- fluidPage(
         )
     ),
     
-    sidebarLayout(
-      sidebarPanel(
-        selectInput(
-          inputId = "var",
-          label = "Choose a variable to visualize:",
-          choices = c("Unintentional Drug Overdose Death Rate", "Firearm", "Suicide", "Drowning"),
-          selected = "Unintentional Drug Overdose Death Rate"
-        ),
-        tags$h4("Summary Statistics"),
-        tableOutput("my_table")  # Placeholder for the table
-      ),
-      mainPanel(
-        tmapOutput("usa_map")  # Placeholder for the map only
-      )
+    div(class = "main-content",
+        sidebarLayout(
+          sidebarPanel(
+            selectInput(
+              inputId = "var",
+              label = "Choose a variable to visualize:",
+              choices = c("Unintentional Drug Overdose Death Rate", "Firearm", "Suicide", "Drowning"),
+              selected = "Unintentional Drug Overdose Death Rate"
+            ),
+            tags$h4("Summary Statistics"),
+            tableOutput("my_table")
+          ),
+          mainPanel(
+            tmapOutput("usa_map")
+          )
+        )
     )
   )
   
@@ -569,15 +705,22 @@ server <- function(input, output, session) {
         output$usa_map <- renderLeaflet({
           req(filtered_counties)  # Ensure data is available
           
-          # Check if CRUDE_RATE has enough unique values for colorQuantile()
-          num_unique_rates <- length(unique(filtered_counties$CRUDE_RATE[!is.na(filtered_counties$CRUDE_RATE)]))
+          # Replace NA values in CRUDE_RATE where POPULATION is missing
+          filtered_counties$CRUDE_RATE <- ifelse(is.na(filtered_counties$POPULATION) | filtered_counties$POPULATION == 0, 
+                                                 NA,  # Assign NA so missing values don't break the color scale
+                                                 filtered_counties$CRUDE_RATE)
           
-          # Choose a coloring method based on the number of unique values
-          if (num_unique_rates > 5) {
-            color_palette <- colorQuantile("Blues", filtered_counties$CRUDE_RATE, n = 5)
-          } else {
-            color_palette <- colorBin("Blues", filtered_counties$CRUDE_RATE, bins = 5)
-          }
+          # Calculate percentiles dynamically from available data
+          quantile_values <- quantile(filtered_counties$CRUDE_RATE, probs = c(0, 0.2, 0.4, 0.6, 0.8, 1), na.rm = TRUE)
+          
+          # Ensure bins are unique (prevent errors with identical breaks)
+          quantile_values <- unique(quantile_values)
+          
+          # Define color palette using dynamic quantile bins
+          color_palette <- colorBin(palette = "Blues", 
+                                    domain = filtered_counties$CRUDE_RATE, 
+                                    bins = quantile_values, 
+                                    na.color = "gray")
           
           leaflet(data = filtered_counties) %>%
             addTiles() %>%
@@ -597,14 +740,27 @@ server <- function(input, output, session) {
               layerId = ~ROWNUM,  # Assigns each county a unique ID based on its ROWNUM
               popup = ~paste0(
                 "<b>County:</b> ", NAME, "<br>",
-                "<b>Crude Rate:</b> ", ifelse(CRUDE_RATE == -1.0, "Unreliable", formatC(CRUDE_RATE, format = "f", big.mark = ",", digits = 2)), "<br>",
+                "<b>Crude Rate:</b> ", ifelse(is.na(CRUDE_RATE), "Not Available",
+                                              ifelse(CRUDE_RATE == -1.0, "Unreliable",
+                                                     formatC(CRUDE_RATE, format = "f", big.mark = ",", digits = 2))), "<br>",
                 "<b>Deaths:</b> ", formatC(DEATHS, format = "f", big.mark = ",", digits = 0)
               )
+            ) %>%
+            addLegend(
+              position = "bottomright",
+              pal = color_palette,
+              values = filtered_counties$CRUDE_RATE,
+              title = "Crude Death Rate",
+              opacity = 1,
+              na.label = "Not Available",
+              labFormat = labelFormat(digits = 2)  # Show actual values in legend
             ) %>%
             setView(lng = mean(st_coordinates(filtered_counties)[,1]), 
                     lat = mean(st_coordinates(filtered_counties)[,2]), 
                     zoom = 6)  # Adjust zoom to focus on selected state
         })
+        
+        
         
       })
       
@@ -647,19 +803,32 @@ server <- function(input, output, session) {
         }
         county_data <- merged_county_data[row_num, ]
         
-        # Replace -1.0 with "Unreliable" for CRUDE_RATE
-        crude_rate_value <- ifelse(county_data$CRUDE_RATE == -1.0, "Unreliable", 
-                                   formatC(county_data$CRUDE_RATE, format = "f", big.mark = ",", digits = 2))
+        # Check if population is missing
+        is_population_missing <- is.na(county_data$POPULATION) | county_data$POPULATION == "Not Available"
+        
+        # Determine Crude Rate Display
+        crude_rate_value <- ifelse(is_population_missing, 
+                                   "Not Available",  # If population is missing, crude rate should be NA
+                                   ifelse(county_data$CRUDE_RATE == -1.0, 
+                                          "Unreliable", 
+                                          formatC(county_data$CRUDE_RATE, format = "f", big.mark = ",", digits = 2)))
+        
+        # Determine Population Display
+        population_value <- ifelse(is_population_missing, 
+                                   "Not Available", 
+                                   formatC(as.numeric(county_data$POPULATION), format = "f", big.mark = ",", digits = 0))
         
         data.frame(
           Field = c("National Average", "County", "Crude Death Rate", "Total Deaths", "Total Population"),
           Value = c(formatC(avg_crude_rate, format = "f", big.mark = ",", digits = 2), 
                     county_data$NAME, 
-                    crude_rate_value,
+                    crude_rate_value,  # Uses the fixed logic for Crude Rate
                     formatC(county_data$DEATHS, format = "f", big.mark = ",", digits = 0), 
-                    formatC(as.numeric(county_data$POPULATION), format = "f", big.mark = ",", digits = 0))  # Explicit conversion
+                    population_value)  # Uses fixed logic for Population
         )
       })
+      
+      
       
       # Render the table
       output$my_table <- renderTable({
