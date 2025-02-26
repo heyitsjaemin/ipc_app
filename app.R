@@ -39,6 +39,7 @@ library(dplyr)
 library(readr)
 library(shinyjs)
 library(leaflet)
+library(ggplot2)
 
 # Define the states that need to be removed
 states_to_remove <- c("American Samoa", "Alaska", "Hawaii", "Commonwealth of the Northern Mariana Islands",
@@ -90,6 +91,25 @@ merged_county_data <- usa_counties %>%
 merged_county_data <- merged_county_data %>%
   mutate(ROWNUM = row_number())  # Add a row number column
 
+
+# Compute Hotspot Analysis using Getis-Ord Gi*
+compute_hotspot <- function(spatial_data) {
+  coords <- st_centroid(spatial_data) %>% st_coordinates()
+  nb <- knearneigh(coords, k = 5) %>% knn2nb()
+  listw <- nb2listw(nb, style = "W")
+  
+  # Calculate Getis-Ord Gi*
+  gi_star <- localG(spatial_data$CRUDE_RATE, listw)
+  
+  # Add results to the dataset
+  spatial_data$hotspot_score <- gi_star
+  spatial_data$hotspot_category <- cut(
+    gi_star, breaks = c(-Inf, -1.96, 1.96, Inf),
+    labels = c("Cold Spot", "Neutral", "Hot Spot")
+  )
+  
+  return(spatial_data)
+}
 
 # Simplify county geometries (reduces vertex count, speeds up rendering)
 #merged_county_data <- st_simplify(merged_county_data, dTolerance = 0.01)
@@ -320,92 +340,137 @@ ui <- fluidPage(
     }
     
     .main-content {
-        margin-bottom: 50px; /* Adds space below the main content */
+        margin-bottom: 50px; 
+    }
+    
+    .scatter-layout {
+      display: flex;
+      flex-direction: row;
+      width: 100%;
+    }
+    .scatter-sidebar {
+      width: 20%;
+      padding: 15px;
+      background-color: #f8f9fa;
+        border-right: 2px solid #ddd;
+      text-align: left;
+    }
+    .scatter-content {
+      width: 80%;
+      padding: 15px;
+      text-align: center;
+    }
+    .scatter-title {
+      font-size: 20px;
+      font-weight: bold;
+      text-align: center;
+      margin-bottom: 15px;
+    }
+    .scatter-dropdown {
+      margin-bottom: 15px;
+    }
+    .explanation-box {
+      padding: 15px;
+      background-color: #ffffff;
+      border-left: 5px solid #0073e6;  /* Adds a blue accent border */
+      border-radius: 8px;
+      box-shadow: 0px 4px 8px rgba(0, 0, 0, 0.1);
+    }
+    .explanation-box h5 {
+      font-size: 18px;
+      font-weight: bold;
+      color: #0073e6;
+      margin-bottom: 10px;
+    }
+    .explanation-box p {
+      font-size: 14px;
+      line-height: 1.6;
+      color: #333;
     }
     
     .site-footer {
-        background-color: #00274c;
-        color: white;
-        font-family: 'Roboto', Arial, sans-serif;
-        padding: 40px 0;
-        text-align: left;
-      }
+      background-color: #00274c;
+      color: white;
+      font-family: 'Roboto', Arial, sans-serif;
+      padding: 40px 0;
+      text-align: left;
+    }
       
-      .footer-container {
-        display: flex;
-        justify-content: space-between;
-        max-width: 1200px;
-        margin: auto;
-        padding: 0 40px;
-      }
+    .footer-container {
+      display: flex;
+      justify-content: space-between;
+      max-width: 1200px;
+      margin: auto;
+      padding: 0 40px;
+    }
 
-      .footer-column {
-        flex: 1;
-        padding: 10px;
-      }
+    .footer-column {
+      flex: 1;
+      padding: 10px;
+    }
 
-      .footer-column h3 {
-        font-size: 18px;
-        font-weight: bold;
-      }
+    .footer-column h3 {
+      font-size: 18px;
+      font-weight: bold;
+    }
 
-      .footer-column p {
-        font-size: 14px;
-        color: #ccc;
-      }
+    .footer-column p {
+      font-size: 14px;
+      color: #ccc;
+    }
 
-      .contact-btn,
-      .donate-btn,
-      .membership-btn {
-        background-color: #ffcb05;
-        color: #00274c;
-        font-weight: bold;
-        padding: 10px 20px;
-        border: none;
-        border-radius: 5px;
-        cursor: pointer;
-        margin-top: 10px;
-        font-size: 14px;
-      }
+    .contact-btn,
+    .donate-btn,
+    .membership-btn {
+      background-color: #ffcb05;
+      color: #00274c;
+      font-weight: bold;
+      padding: 10px 20px;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      margin-top: 10px;
+      font-size: 14px;
+    }
 
-      .contact-btn:hover,
-      .donate-btn:hover,
-      .membership-btn:hover {
-        background-color: #e0b804;
-      }
+    .contact-btn:hover,
+    .donate-btn:hover,
+    .membership-btn:hover {
+      background-color: #e0b804;
+    }
 
-      .social-icons {
-        margin-top: 10px;
-      }
+    .social-icons {
+      margin-top: 10px;
+    }
 
-      .social-icons a {
-        color: white;
-        font-size: 20px;
-        margin-right: 10px;
-        text-decoration: none;
-      }
+    .social-icons a {
+      color: white;
+      font-size: 20px;
+      margin-right: 10px;
+      text-decoration: none;
+    }
 
-      .footer-line {
-        border: 0;
-        border-top: 1px solid #ccc;
-        margin: 30px auto;
-        width: 90%;
-      }
+    .footer-line {
+      border: 0;
+      border-top: 1px solid #ccc;
+      margin: 30px auto;
+      width: 90%;
+    }
 
-      .footer-bottom {
-        text-align: center;
-        font-size: 12px;
-        color: #ccc;
-      }
+    .footer-bottom {
+      text-align: center;
+      font-size: 12px;
+      color: #ccc;
+    }
 
-      .footer-bottom a {
-        color: #ffcb05;
-        text-decoration: none;
-      }
+    .footer-bottom a {
+      color: #ffcb05;
+      text-decoration: none;
+    }
 
-      .footer-bottom a:hover {
-        text-decoration: underline;
-      }
+    .footer-bottom a:hover {
+      text-decoration: underline;
+    }
   ")),
     
     # Full Header (Top Bar + Navigation)
@@ -450,6 +515,14 @@ ui <- fluidPage(
     
     div(class = "dropdown-container",
         fluidRow(
+          column(4,
+                 selectInput(
+                   inputId = "map_type",
+                   label = "Select Map Type",
+                   choices = c("Standard", "Hotspot Analysis" ),
+                   selected = "Standard"
+                 )
+          ),
           column(4,
                  selectInput(
                    inputId = "demographics",
@@ -499,6 +572,33 @@ ui <- fluidPage(
           mainPanel(
             tmapOutput("usa_map")
           )
+        )
+    ),
+    div(class = "scatter-layout",
+        
+        # Sidebar Section (20%)
+        div(class = "scatter-sidebar",
+            ## tags$h4("Customize Scatterplot"),
+            div(class = "scatter-dropdown",
+                selectInput(
+                  inputId = "scatter_var",
+                  label = "Select Variable to Compare with Crude Rate:",
+                  choices = c("Population", "Deaths"),
+                  selected = "Population"
+                )
+            ),
+            div(class = "explanation-box",
+                tags$h5("About the Scatterplot"),
+                tags$p("This scatterplot visualizes the relationship between the Crude Death Rate and a selected variable."),
+                tags$p("The red dashed line represents a trend line (linear regression) to show correlation patterns."),
+                tags$p("Logarithmic scaling is applied for better distribution visualization."),
+                tags$p("Use the dropdown to switch between different demographic data.")
+            )
+        ),
+        
+        # Scatterplot Section (80%)
+        div(class = "scatter-content",
+            plotOutput("scatter_plot", height = "450px", width = "100%")
         )
     )
   )
@@ -634,6 +734,41 @@ server <- function(input, output, session) {
           })
         }
       })
+      
+      
+      output$scatter_plot <- renderPlot({
+        # Remove total row
+        state_data <- overdose_state[overdose_state$STATE != "Total", ]
+        
+        # Convert columns to numeric
+        state_data$POPULATION <- as.numeric(state_data$POPULATION)
+        state_data$DEATHS <- as.numeric(state_data$DEATHS)
+        state_data$CRUDE_RATE <- as.numeric(state_data$CRUDE_RATE)
+        
+        # Get selected variable
+        selected_var <- switch(input$scatter_var,
+                               "Population" = state_data$POPULATION,
+                               "Deaths" = state_data$DEATHS)
+        
+        # Create scatterplot
+        ggplot(state_data, aes(x = selected_var, y = CRUDE_RATE)) +
+          geom_point(color = "#0073e6", size = 4, alpha = 0.8) +
+          geom_smooth(method = "lm", color = "red", linetype = "dashed") +  # Trend line
+          scale_x_log10() +  # Log scale for better readability
+          labs(title = paste("Crude Rate vs.", input$scatter_var, "(State Level)"),
+               x = paste(input$scatter_var, "(Log Scale)"), 
+               y = "Crude Rate") +
+          theme_minimal() +
+          theme(
+            plot.title = element_text(hjust = 0.5, face = "bold", size = 16),
+            axis.title = element_text(face = "bold"),
+            panel.grid.major = element_line(color = "grey80"),
+            plot.background = element_rect(fill = "#f8f9fa", color = NA),
+            panel.background = element_rect(fill = "#ffffff", color = "#dddddd")
+          )
+      })
+      
+      
       
       
     } else {
