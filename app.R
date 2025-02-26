@@ -40,6 +40,8 @@ library(readr)
 library(shinyjs)
 library(leaflet)
 library(ggplot2)
+library(shinyBS)
+library(spdep)
 
 # Define the states that need to be removed
 states_to_remove <- c("American Samoa", "Alaska", "Hawaii", "Commonwealth of the Northern Mariana Islands",
@@ -92,8 +94,11 @@ merged_county_data <- merged_county_data %>%
   mutate(ROWNUM = row_number())  # Add a row number column
 
 
-# Compute Hotspot Analysis using Getis-Ord Gi*
 compute_hotspot <- function(spatial_data) {
+  if (!"CRUDE_RATE" %in% colnames(spatial_data)) {
+    stop("Error: 'CRUDE_RATE' column not found in dataset.")
+  }
+  
   coords <- st_centroid(spatial_data) %>% st_coordinates()
   nb <- knearneigh(coords, k = 5) %>% knn2nb()
   listw <- nb2listw(nb, style = "W")
@@ -101,7 +106,7 @@ compute_hotspot <- function(spatial_data) {
   # Calculate Getis-Ord Gi*
   gi_star <- localG(spatial_data$CRUDE_RATE, listw)
   
-  # Add results to the dataset
+  # Ensure the new column exists
   spatial_data$hotspot_score <- gi_star
   spatial_data$hotspot_category <- cut(
     gi_star, breaks = c(-Inf, -1.96, 1.96, Inf),
@@ -110,6 +115,7 @@ compute_hotspot <- function(spatial_data) {
   
   return(spatial_data)
 }
+
 
 # Simplify county geometries (reduces vertex count, speeds up rendering)
 #merged_county_data <- st_simplify(merged_county_data, dTolerance = 0.01)
@@ -131,7 +137,7 @@ tmap_mode("view")
 
 # UI for Shiny app
 ui <- fluidPage(
-  useShinyjs(),  # Initialize shinyjs
+  useShinyjs(),
   
   # Footer Section
   tags$footer(
@@ -588,12 +594,16 @@ ui <- fluidPage(
                 )
             ),
             div(class = "explanation-box",
-                tags$h5("About the Scatterplot"),
-                tags$p("This scatterplot visualizes the relationship between the Crude Death Rate and a selected variable."),
-                tags$p("The red dashed line represents a trend line (linear regression) to show correlation patterns."),
-                tags$p("Logarithmic scaling is applied for better distribution visualization."),
-                tags$p("Use the dropdown to switch between different demographic data.")
+                tags$h5("Regression Analysis"),
+                
+                # Dynamically display regression stats
+                uiOutput("scatter_stats"),
+                
+                # Hidden details (now moved to tooltips)
+                tags$hr(),  # Separator
+                tags$p("Hover over each metric to see what it means.")
             )
+            
         ),
         
         # Scatterplot Section (80%)
@@ -713,27 +723,91 @@ server <- function(input, output, session) {
           
           # Render the map
           output$usa_map <- renderTmap({
-            tm_shape(merged_state_data) +
-              tm_borders() +
-              tm_fill(
-                col = "CRUDE_RATE",
-                palette = "brewer.blues",  # Use a proper color scale
-                style = "quantile",  # Automatically categorize data
-                title = "Crude Rate",
-                popup.vars = c("State" = "NAME", "Crude Rate" = "CRUDE_RATE", "Deaths" = "DEATHS")
-              ) +
-              # tm_text(
-              #   text = "STUSPS",
-              #   size = 0.5,
-              #   col = "black"
-              # ) +
-              tm_layout(
-                scale = 1.5,
-                legend.title.size = 1.2
-              )
+            
+            
+            data <- reactive_state_data()
+            
+            # Check if the user selected Hotspot Analysis
+            if (input$map_type == "Hotspot Analysis") {
+              tm_shape(data) +
+                tm_borders() +
+                tm_fill(
+                  col = "hotspot_category",  # Use Hotspot Classification
+                  palette = c("blue", "white", "red"),  # Coldspot, Neutral, Hotspot
+                  title = "Hotspot Analysis",
+                  popup.vars = c("State" = "NAME", "Hotspot Category" = "hotspot_category")
+                ) +
+                tm_layout(
+                  scale = 1.5,
+                  legend.title.size = 1.2
+                )
+              
+            } else {  # Standard Mode
+              tm_shape(data) +
+                tm_borders() +
+                tm_fill(
+                  col = "CRUDE_RATE",
+                  palette = "brewer.blues",
+                  style = "quantile",
+                  title = "Crude Rate",
+                  popup.vars = c("State" = "NAME", "Crude Rate" = "CRUDE_RATE", "Deaths" = "DEATHS")
+                ) +
+                tm_layout(
+                  scale = 1.5,
+                  legend.title.size = 1.2
+                )
+            }
+            
+            
+            
           })
         }
       })
+      
+      output$scatter_stats <- renderUI({
+        req(input$scatter_var)  # Ensure input is not null
+        
+        # Remove total row
+        state_data <- overdose_state[overdose_state$STATE != "Total", ]
+        
+        # Convert columns to numeric
+        state_data$POPULATION <- as.numeric(state_data$POPULATION)
+        state_data$DEATHS <- as.numeric(state_data$DEATHS)
+        state_data$CRUDE_RATE <- as.numeric(state_data$CRUDE_RATE)
+        
+        # Get selected variable
+        selected_var <- switch(input$scatter_var,
+                               "Population" = state_data$POPULATION,
+                               "Deaths" = state_data$DEATHS)
+        
+        # Compute correlation and regression
+        regression_model <- lm(CRUDE_RATE ~ selected_var, data = state_data)
+        correlation_value <- cor(selected_var, state_data$CRUDE_RATE, use = "complete.obs")
+        r_squared <- summary(regression_model)$r.squared
+        slope <- coef(regression_model)[2]
+        
+        # Generate formatted output with unique id's for tooltips
+        tagList(
+          tags$p(HTML(paste0("<span id='slope_info'><b>📈 Slope:</b></span> ", round(slope, 4)))),
+          tags$p(HTML(paste0("<span id='r_squared_info'><b>📉 R-squared (R²):</b></span> ", round(r_squared, 4)))),
+          tags$p(HTML(paste0("<span id='correlation_info'><b>🔗 Correlation Coefficient (Pearson’s r):</b></span> ", round(correlation_value, 4)))),
+          tags$p(HTML(paste0("<span id='interpretation_info'><b>💡 Interpretation:</b></span> ", 
+                             ifelse(abs(correlation_value) > 0.7, "Strong correlation.",
+                                    ifelse(abs(correlation_value) > 0.3, "Moderate correlation.", "Weak or no correlation.")))))
+        )
+      })
+      
+      
+      observe({
+        req(input$scatter_var)  # Ensure a variable is selected before running tooltips
+        
+        bsTooltip(id = "slope_info", title = "The slope shows how much the Crude Rate changes when the selected variable increases by one unit.", placement = "right")
+        bsTooltip(id = "r_squared_info", title = "R² indicates how well the selected variable explains the variation in Crude Rate. A value closer to 1 means a strong relationship.", placement = "right")
+        bsTooltip(id = "correlation_info", title = "Pearson's r measures the strength of the relationship. Closer to +1 or -1 means a strong correlation.", placement = "right")
+        bsTooltip(id = "interpretation_info", title = "If the correlation is weak, other external factors might be affecting the Crude Rate.", placement = "right")
+      })
+      
+      
       
       
       output$scatter_plot <- renderPlot({
@@ -768,8 +842,19 @@ server <- function(input, output, session) {
           )
       })
       
-      
-      
+      reactive_state_data <- reactive({
+        req(input$map_type)  # Ensure input exists
+        
+        if (input$map_type == "Hotspot Analysis") {
+          data <- compute_hotspot(merged_state_data)
+          if (!"hotspot_category" %in% colnames(data)) {
+            stop("Error: 'hotspot_category' column missing after hotspot computation.")
+          }
+          return(data)
+        } else {
+          return(merged_state_data)
+        }
+      })
       
     } else {
       print("County map selected")
