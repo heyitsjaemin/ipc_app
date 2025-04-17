@@ -30,6 +30,9 @@
 # Population Stats Reference: https://www.census.gov/data/tables/time-series/demo/popest/2020s-state-total.html#v2024
 #######################################################
 
+require(tmap)
+install.packages("tmap", dependencies = TRUE)
+
 
 library(shiny)
 library(tigris)
