@@ -5,9 +5,9 @@ account: ipcapp
 server: shinyapps.io
 hostUrl: https://api.shinyapps.io/v1
 appId: 13675393
-bundleId: 9860594
+bundleId:
 url: https://ipcapp.shinyapps.io/RShinyApp/
 version: 1
 asMultiple: FALSE
 asStatic: FALSE
-ignoredFiles: data/ipcapp_010_usa_overdose.csv|data/ipcapp_011_usa_overdose_2022.csv|data/ipcapp_020_mi_overdose_norm_2020_2021.csv|README.md|state_level_map.R
+ignoredFiles: README.md|state_level_map.R
