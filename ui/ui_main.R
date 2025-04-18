@@ -369,7 +369,7 @@ ui <- fluidPage(
     
     
     div(class = "update-date",
-        "Last Updated on Feb 10, 2025"    
+        "Last Updated on Apr 04, 2025"    
     ),
     
     div(class = "radio-toolbar",
@@ -405,9 +405,9 @@ ui <- fluidPage(
           ),
           column(4,
                  selectInput(
-                   inputId = "year",
-                   label = "Year",
-                   choices = c("2023", "2022", "2021", "2020"),
+                   inputId = "selected_period",
+                   label = "Period",
+                   choices = c("2019", "2020", "2021", "2022", "2023", "TTM"),
                    selected = "2023"
                  )
           ),
@@ -432,7 +432,7 @@ ui <- fluidPage(
             selectInput(
               inputId = "var",
               label = "Choose a variable to visualize:",
-              choices = c("Unintentional Drug Overdose Death Rate", "Firearm", "Suicide", "Drowning"),
+              choices = c("Unintentional Drug Overdose Death Rate", "Firearm", "Suicide", "Homicide"),
               selected = "Unintentional Drug Overdose Death Rate"
             ),
             tags$h4("Summary Statistics"),
@@ -452,8 +452,8 @@ ui <- fluidPage(
                 selectInput(
                   inputId = "scatter_var",
                   label = "Select Variable to Compare with Crude Rate:",
-                  choices = c("Population", "Deaths"),
-                  selected = "Population"
+                  choices = c("Precipitation", "Mean Temperature"),
+                  selected = "Precipitation"
                 )
             ),
             div(class = "explanation-box",
